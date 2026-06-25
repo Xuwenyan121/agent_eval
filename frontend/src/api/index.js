@@ -61,7 +61,6 @@ export const datasetApi = {
   deleteSample: (id, sampleId) => apiClient.delete(`/datasets/${id}/samples/${sampleId}/`),
   // Upload JSONL file (multipart)
   upload: (id, formData) => apiClient.post(`/datasets/${id}/upload/`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000,
   }),
   // Versioning

@@ -27,6 +27,14 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            // Ensure Content-Type header is forwarded for multipart uploads
+            if (req.headers['content-type']?.includes('multipart/form-data')) {
+              proxyReq.setHeader('Content-Type', req.headers['content-type'])
+            }
+          })
+        },
       },
     },
   },
