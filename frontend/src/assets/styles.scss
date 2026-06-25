@@ -1,0 +1,466 @@
+// ─── Color Palette (CSS Custom Properties for theme switching) ──
+// Dark theme (default)
+:root {
+  --bg-deep:       #0F1117;
+  --bg-card:       #1A1D27;
+  --bg-sidebar:    #141620;
+  --bg-input:      #1E2130;
+  --bg-hover:      rgba(108, 92, 231, 0.1);
+  --bg-active:     linear-gradient(135deg, rgba(108, 92, 231, 0.2), rgba(255, 107, 157, 0.1));
+  --border-color:  #2A2D3A;
+  --text-primary:  #E8E8ED;
+  --text-secondary:#9498A6;
+  --text-muted:    #6B6F80;
+  --accent-start:  #6C5CE7;
+  --accent-end:    #FF6B9D;
+  --success:       #00D68F;
+  --warning:       #FFAA00;
+  --danger:        #FF3D71;
+  --info:          #6C5CE7;
+  --table-header-bg: #1E2130;
+  --switch-bg:     #2A2D3A;
+  --shadow-color:  rgba(0, 0, 0, 0.3);
+  --tag-bg:        rgba(108, 92, 231, 0.15);
+  --tag-border:    rgba(108, 92, 231, 0.3);
+  --tag-text:      #6C5CE7;
+  --badge-pending-bg:  rgba(255, 170, 0, 0.15);
+  --badge-running-bg:  rgba(108, 92, 231, 0.15);
+  --badge-success-bg:  rgba(0, 214, 143, 0.15);
+  --badge-danger-bg:   rgba(255, 61, 113, 0.15);
+  --dialog-bg:     #1A1D27;
+  --code-bg:       #1E2130;
+  --info-card-gradient-end: #22253A;
+}
+
+// Light theme — all frames pure white
+.light-theme {
+  --bg-deep:       #FFFFFF;
+  --bg-card:       #FFFFFF;
+  --bg-sidebar:    #FFFFFF;
+  --bg-input:      #FFFFFF;
+  --bg-hover:      rgba(108, 92, 231, 0.06);
+  --bg-active:     linear-gradient(135deg, rgba(108, 92, 231, 0.08), rgba(255, 107, 157, 0.04));
+  --border-color:  #E5E7EB;
+  --text-primary:  #111827;
+  --text-secondary:#6B7280;
+  --text-muted:    #9CA3AF;
+  --accent-start:  #6C5CE7;
+  --accent-end:    #FF6B9D;
+  --success:       #10B981;
+  --warning:       #F59E0B;
+  --danger:        #EF4444;
+  --info:          #6C5CE7;
+  --table-header-bg: #FFFFFF;
+  --switch-bg:     #D1D5DB;
+  --shadow-color:  rgba(0, 0, 0, 0.06);
+  --tag-bg:        rgba(108, 92, 231, 0.08);
+  --tag-border:    rgba(108, 92, 231, 0.2);
+  --tag-text:      #6C5CE7;
+  --badge-pending-bg:  rgba(245, 158, 11, 0.1);
+  --badge-running-bg:  rgba(108, 92, 231, 0.1);
+  --badge-success-bg:  rgba(16, 185, 129, 0.1);
+  --badge-danger-bg:   rgba(239, 68, 68, 0.1);
+  --dialog-bg:     #FFFFFF;
+  --code-bg:       #FFFFFF;
+  --info-card-gradient-end: #FFFFFF;
+}
+
+// ─── Global Reset ──
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+// ─── App Container ──
+.app-container {
+  height: 100vh;
+  display: flex;
+
+  .el-container {
+    height: 100%;
+  }
+}
+
+// ─── Sidebar ──
+.sidebar {
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+  overflow: hidden;
+  box-shadow: 2px 0 8px var(--shadow-color);
+
+  .logo {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid var(--border-color);
+    transition: border-color 0.3s ease;
+
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo-icon {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent-start);
+    }
+  }
+
+  .sidebar-menu {
+    flex: 1;
+    border-right: none;
+    padding: 8px 0;
+
+    .el-menu-item {
+      color: var(--text-secondary);
+      height: 48px;
+      margin: 2px 8px;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+      &.is-active {
+        background: var(--bg-active);
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+    }
+  }
+
+  .sidebar-toggle {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid var(--border-color);
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: border-color 0.3s ease, color 0.3s ease;
+    &:hover { color: var(--text-primary); }
+  }
+}
+
+// ─── Header ──
+.header {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-sidebar);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+
+  .page-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+}
+
+// ─── Main Content ──
+.main-content {
+  background: var(--bg-deep);
+  padding: 24px;
+  overflow-y: auto;
+  transition: background-color 0.3s ease;
+}
+
+// ─── Card Style ──
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+// ─── Stat Card ──
+.stat-card {
+  @extend .card;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .stat-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+}
+
+// ─── Status Badges ──
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.3s ease;
+
+  &.pending  { background: var(--badge-pending-bg); color: var(--warning); }
+  &.running  { background: var(--badge-running-bg); color: var(--accent-start); }
+  &.completed { background: var(--badge-success-bg); color: var(--success); }
+  &.failed   { background: var(--badge-danger-bg); color: var(--danger); }
+}
+
+// ─── Gradient Button ──
+.btn-gradient {
+  background: linear-gradient(135deg, var(--accent-start), var(--accent-end)) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 600;
+  border-radius: 8px;
+
+  &:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+}
+
+// ─── Table Overrides ──
+.el-table {
+  --el-table-bg-color: var(--bg-card);
+  --el-table-tr-bg-color: var(--bg-card);
+  --el-table-header-bg-color: var(--table-header-bg);
+  --el-table-border-color: var(--border-color);
+  --el-table-text-color: var(--text-primary);
+  --el-table-header-text-color: var(--text-secondary);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+// ─── Form Overrides ──
+.el-input__wrapper,
+.el-textarea__inner {
+  background: var(--bg-input) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: none !important;
+  color: var(--text-primary) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.el-select .el-input__wrapper {
+  background: var(--bg-input) !important;
+}
+
+.el-input__inner,
+.el-textarea__inner {
+  color: var(--text-primary) !important;
+}
+
+.el-input__inner::placeholder,
+.el-textarea__inner::placeholder {
+  color: var(--text-muted) !important;
+}
+
+// ─── Form Labels ──
+.el-form-item__label {
+  color: var(--text-secondary) !important;
+}
+
+// ─── Dialog ──
+.el-dialog {
+  background: var(--dialog-bg) !important;
+  border: 1px solid var(--border-color);
+}
+
+.el-dialog__header {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.el-dialog__title {
+  color: var(--text-primary) !important;
+}
+
+.el-dialog__body {
+  color: var(--text-primary) !important;
+}
+
+// ─── Message Box ──
+.el-message-box {
+  background: var(--dialog-bg) !important;
+  border: 1px solid var(--border-color);
+}
+
+// ─── Select Dropdown ──
+.el-select-dropdown {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+.el-select-dropdown__item {
+  color: var(--text-primary) !important;
+
+  &.hover, &:hover {
+    background: var(--bg-hover) !important;
+  }
+  &.selected {
+    color: var(--accent-start) !important;
+  }
+}
+
+.el-popper.is-light {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+.el-popper.is-light .el-popper__arrow::before {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+// ─── Tabs ──
+.el-tabs__item {
+  color: var(--text-secondary) !important;
+  transition: color 0.3s ease;
+
+  &.is-active {
+    color: var(--accent-start) !important;
+  }
+}
+
+.el-tabs__active-bar {
+  background: var(--accent-start) !important;
+}
+
+.el-tabs__nav-wrap::after {
+  background: var(--border-color) !important;
+}
+
+// ─── Pagination ──
+.el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-text-color: var(--text-secondary);
+  --el-pagination-button-bg-color: var(--bg-card);
+  --el-pagination-hover-color: var(--accent-start);
+}
+
+// ─── Scrollbar ──
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+  transition: background-color 0.3s ease;
+}
+
+// ─── Switch (theme toggle) ──
+.el-switch {
+  --el-switch-on-color: var(--accent-start);
+  --el-switch-off-color: var(--switch-bg);
+}
+
+// ─── Tag ──
+.el-tag {
+  transition: all 0.3s ease;
+}
+
+// ─── Popconfirm ──
+.el-popconfirm {
+  background: var(--bg-card) !important;
+}
+
+// ─── Loading ──
+.el-loading-mask {
+  background: rgba(var(--bg-deep), 0.7) !important;
+}
+
+// ─── Skeleton ──
+.el-skeleton__item {
+  background: var(--bg-input) !important;
+}
+
+// ─── Utility classes for theme-aware colors ──
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+.text-accent { color: var(--accent-start); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-danger { color: var(--danger); }
+
+.bg-card { background: var(--bg-card); }
+.bg-input { background: var(--bg-input); }
+
+// ─── Theme toggle switch custom style ──
+.theme-switch {
+  .el-switch__core {
+    border-radius: 20px;
+  }
+}
+
+// ─── Light theme specific enhancements ──
+.light-theme {
+  .sidebar {
+    box-shadow: 1px 0 4px rgba(0, 0, 0, 0.06);
+  }
+
+  .header {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  .card, .stat-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    border-color: #E5E7EB;
+  }
+
+  .el-input__wrapper,
+  .el-textarea__inner {
+    box-shadow: 0 0 0 1px var(--border-color) inset !important;
+  }
+
+  .el-table {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .el-table th.el-table__cell {
+    background: #F9FAFB !important;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .el-dialog {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+
+  .main-content {
+    background: #F8FAFC;
+  }
+
+  .info-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+}
