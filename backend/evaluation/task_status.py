@@ -88,6 +88,16 @@ class TaskStatus:
             }
 
     @staticmethod
+    def _resolve_celery_task_id(task_id: str) -> str:
+        """
+        Resolve the Celery task ID from the Django task UUID.
+        The Celery task ID is stored in cache when the task is dispatched.
+        Falls back to the original task_id if no mapping exists (backward compat).
+        """
+        celery_task_id = cache.get(f"celery_task_id:{task_id}")
+        return celery_task_id if celery_task_id else task_id
+
+    @staticmethod
     def get_full_status(task_id: str) -> dict:
         """
         Combine Celery status + Redis progress for complete task state.
@@ -101,7 +111,8 @@ class TaskStatus:
                 "is_failed": bool,
             }
         """
-        celery_status = TaskStatus.get_celery_status(task_id)
+        celery_task_id = TaskStatus._resolve_celery_task_id(task_id)
+        celery_status = TaskStatus.get_celery_status(celery_task_id)
         progress = TaskStatus.get_progress(task_id)
 
         return {

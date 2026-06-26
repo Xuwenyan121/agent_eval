@@ -118,12 +118,12 @@
           </h4>
           <div class="toolbar-right">
             <el-input v-model="searchResult" placeholder="搜索 sample_id..." size="small" clearable style="width: 180px" />
-            <el-select v-model="filterBadcase" size="small" style="width: 130px" clearable @change="loadResults">
+            <el-select v-model="filterBadcase" size="small" style="width: 130px" clearable @change="currentPage = 1; loadResults()">
               <el-option label="全部结果" value="" />
               <el-option label="仅 Bad Case" value="true" />
               <el-option label="仅通过" value="false" />
             </el-select>
-            <el-select v-model="sortByScore" size="small" style="width: 130px" @change="loadResults">
+            <el-select v-model="sortByScore" size="small" style="width: 130px" @change="currentPage = 1; loadResults()">
               <el-option label="分数：低→高" value="score" />
               <el-option label="分数：高→低" value="-score" />
               <el-option label="最新优先" value="" />

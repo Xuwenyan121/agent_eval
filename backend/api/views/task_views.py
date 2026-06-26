@@ -95,6 +95,10 @@ class EvaluationTaskViewSet(viewsets.ModelViewSet):
 
         result = run_evaluation_task.delay(str(task.id))
 
+        # Store Celery task ID → Django task UUID mapping for progress queries
+        from django.core.cache import cache
+        cache.set(f"celery_task_id:{str(task.id)}", result.id, timeout=86400)
+
         return Response({
             "status": "started",
             "task_id": str(task.id),
@@ -116,8 +120,10 @@ class EvaluationTaskViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Revoke the Celery task
-        TaskStatus.revoke_task(str(task.id), terminate=True)
+        # Revoke the Celery task — use Celery task ID, not Django UUID
+        from django.core.cache import cache
+        celery_task_id = cache.get(f"celery_task_id:{str(task.id)}") or str(task.id)
+        TaskStatus.revoke_task(celery_task_id, terminate=True)
 
         # Mark as cancelled
         task.status = "cancelled"

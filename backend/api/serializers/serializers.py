@@ -165,6 +165,9 @@ class EvaluationTaskCreateSerializer(serializers.ModelSerializer):
 class EvaluationTaskSerializer(serializers.ModelSerializer):
     agent_name = serializers.CharField(source="agent.name", read_only=True)
     dataset_name = serializers.CharField(source="dataset.name", read_only=True)
+    result_count = serializers.IntegerField(read_only=True)
+    average_score = serializers.FloatField(read_only=True)
+    badcase_count = serializers.IntegerField(read_only=True)
     summary = serializers.DictField(read_only=True)
 
     class Meta:
@@ -175,6 +178,7 @@ class EvaluationTaskSerializer(serializers.ModelSerializer):
             "conv_id_strategy",
             "status", "started_at", "completed_at",
             "report_path", "mlflow_run_id",
+            "result_count", "average_score", "badcase_count",
             "summary", "created_at",
         ]
         read_only_fields = [

@@ -29,9 +29,10 @@ export default defineConfig({
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
-            // Ensure Content-Type header is forwarded for multipart uploads
-            if (req.headers['content-type']?.includes('multipart/form-data')) {
-              proxyReq.setHeader('Content-Type', req.headers['content-type'])
+            // Ensure Content-Type header is forwarded for all requests
+            const ct = req.headers['content-type']
+            if (ct) {
+              proxyReq.setHeader('Content-Type', ct)
             }
           })
         },

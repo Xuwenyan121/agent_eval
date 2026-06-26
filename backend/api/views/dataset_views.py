@@ -114,12 +114,14 @@ def _parse_spreadsheet_rows(rows_with_header):
                 errors.append({"line": line_num, "error": "Missing content/query column"})
                 continue
 
-            # Build expected_output JSON
-            output_obj = {}
-            if col_output is not None and col_output < len(cells) and cells[col_output]:
-                output_obj["expected_output"] = cells[col_output]
+            # Build expected_output: store as plain text if no toolcalling, otherwise wrap in JSON
+            output_text = cells[col_output] if (col_output is not None and col_output < len(cells) and cells[col_output]) else ""
             if col_tool is not None and col_tool < len(cells) and cells[col_tool]:
+                output_obj = {}
+                if output_text:
+                    output_obj["expected_output"] = output_text
                 output_obj["toolcalling"] = cells[col_tool]
+                output_text = json.dumps(output_obj, ensure_ascii=False)
 
             # Derive sample_id from convId + content hash for uniqueness
             conv_id = input_obj.get("convId", "")
@@ -131,7 +133,7 @@ def _parse_spreadsheet_rows(rows_with_header):
             samples.append({
                 "sample_id": sample_id,
                 "input": json.dumps(input_obj, ensure_ascii=False),
-                "expected_output": json.dumps(output_obj, ensure_ascii=False) if output_obj else "",
+                "expected_output": output_text,
                 "expected_meta": _parse_meta_column(
                     cells[col_meta] if col_meta is not None and col_meta < len(cells) else ""
                 ),

@@ -315,7 +315,12 @@ class KeywordCoverageMetric(BaseMetric):
             keywords = set(self.keywords)
         else:
             ref = test_case.expected_output or ""
-            if self.extract_method == "jieba":
+            # Try to parse JSON: if expected_output is a JSON structure like
+            # {"expected_output": "钼铁"}, extract inner values as keywords.
+            extracted = self._extract_values_from_json(ref)
+            if extracted:
+                keywords = set(extracted)
+            elif self.extract_method == "jieba":
                 keywords = set(w for w in jieba.cut(ref) if len(w) >= 2)
             else:
                 keywords = set(w for w in ref.split() if len(w) >= 2)
@@ -340,6 +345,37 @@ class KeywordCoverageMetric(BaseMetric):
 
     def is_successful(self) -> bool:
         return self.success
+
+    @staticmethod
+    def _extract_values_from_json(text: str) -> list:
+        """
+        Extract meaningful string values from a JSON structure.
+        For {"expected_output": "钼铁"} → returns ["钼铁"].
+        Handles nested dicts and lists, filtering out non-value JSON artifacts.
+        """
+        import json
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            return []
+
+        results = []
+
+        def _walk(obj):
+            if isinstance(obj, str):
+                # Filter out JSON structural strings like '{', ':', etc.
+                stripped = obj.strip()
+                if stripped and not all(c in '{}[]":, \t\n\r' for c in stripped):
+                    results.append(stripped)
+            elif isinstance(obj, dict):
+                for v in obj.values():
+                    _walk(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    _walk(item)
+
+        _walk(data)
+        return [r for r in results if r]
 
     @property
     def __name__(self):

@@ -36,7 +36,7 @@ services:
       --host 0.0.0.0
       --port 5000
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - mlflow_data:/mlflow
     healthcheck:
@@ -78,7 +78,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A config worker -l info -c 4 --max-tasks-per-child=100
+    command: celery -A config worker -l info -c 4 -Q celery,evaluation --max-tasks-per-child=100
     depends_on:
       - redis
       - postgres
