@@ -2,6 +2,7 @@ from api.views.agent_views import AgentEndpointViewSet
 from api.views.dataset_views import DatasetViewSet
 from api.views.task_views import EvaluationTaskViewSet
 from api.views.result_views import EvaluationResultViewSet, TraceViewSet, BadCaseFeedbackViewSet
+from api.views.badcase_rule_views import BadCaseCollectionRuleViewSet
 from api.views.metric_views import MetricDefinitionViewSet, metric_dry_run
 from api.views.prompt_views import JudgePromptViewSet, prompt_dry_run
 from api.views.model_views import JudgeModelViewSet, model_test
@@ -13,6 +14,7 @@ __all__ = [
     "EvaluationResultViewSet",
     "TraceViewSet",
     "BadCaseFeedbackViewSet",
+    "BadCaseCollectionRuleViewSet",
     "MetricDefinitionViewSet",
     "metric_dry_run",
     "JudgePromptViewSet",

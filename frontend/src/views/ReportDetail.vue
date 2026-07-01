@@ -11,6 +11,10 @@
           <el-icon><Download /></el-icon>
           导出 JSONL
         </el-button>
+        <el-button type="primary" @click="handleExportExcel">
+          <el-icon><Download /></el-icon>
+          导出 Excel
+        </el-button>
         <el-button @click="$router.push(`/tasks/${taskId}`)">
           <el-icon><SetUp /></el-icon>
           任务详情
@@ -109,6 +113,38 @@
         </div>
       </div>
 
+      <!-- Badcase Analysis -->
+      <div class="card" v-if="badcaseAnalysis && badcaseAnalysis.total_badcases > 0">
+        <h4 class="section-title">
+          📊 Badcase 原因分析
+          <span class="count-badge">{{ badcaseAnalysis.total_badcases }}</span>
+        </h4>
+
+        <!-- Category Cards -->
+        <div class="bc-category-row">
+          <div
+            v-for="cat in badcaseAnalysis.categories"
+            :key="cat.key"
+            class="bc-cat-card"
+            :class="['cat-' + cat.key, { 'bc-cat-active': selectedCategory === cat.key }]"
+            :style="{ opacity: cat.count === 0 ? 0.5 : 1, cursor: cat.count > 0 ? 'pointer' : 'default' }"
+            @click="handleCategoryClick(cat)"
+          >
+            <span class="bc-cat-count">{{ cat.count }}</span>
+            <span class="bc-cat-name">{{ cat.name }}</span>
+            <span v-if="selectedCategory === cat.key" class="bc-cat-badge">筛选中</span>
+          </div>
+        </div>
+
+        <!-- Active category filter hint -->
+        <div v-if="selectedCategory && selectedCategorySampleIds.length > 0" class="bc-filter-hint">
+          <el-icon><Filter /></el-icon>
+          <span>已筛选 "{{ selectedCategoryName }}" 类别中的 {{ selectedCategorySampleIds.length }} 个样本</span>
+          <el-button text size="small" type="primary" @click="clearCategoryFilter">清除筛选</el-button>
+        </div>
+
+      </div>
+
       <!-- Results Table -->
       <div class="card" style="padding: 0; overflow: hidden">
         <div class="results-toolbar">
@@ -173,7 +209,11 @@
           </el-table-column>
           <el-table-column prop="sample_id" label="样本 ID" width="120">
             <template #default="{ row }">
-              <span class="sample-id">{{ row.sample_id }}</span>
+              <span
+                class="sample-id sample-id-link"
+                @click.stop="goToEditSample(row.sample_id)"
+                :title="'编辑样本 ' + row.sample_id"
+              >{{ row.sample_id }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="overall_score" label="得分" width="100" sortable>
@@ -250,13 +290,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTaskStore } from '@/stores/tasks'
 import { useResultStore } from '@/stores/results'
 import { formatDate } from '@/utils'
 import { EmptyState } from '@/components'
 import { ElMessage } from 'element-plus'
+import { taskApi } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -270,6 +311,50 @@ const pageSize = 20
 const searchResult = ref('')
 const filterBadcase = ref('')
 const sortByScore = ref('-score')
+
+const badcaseAnalysis = ref(null)
+
+// Category filter state
+const selectedCategory = ref(null)
+
+const selectedCategoryName = computed(() => {
+  if (!selectedCategory.value || !badcaseAnalysis.value) return ''
+  const cat = badcaseAnalysis.value.categories.find(c => c.key === selectedCategory.value)
+  return cat ? cat.name : ''
+})
+
+const selectedCategorySampleIds = computed(() => {
+  if (!selectedCategory.value || !badcaseAnalysis.value) return []
+  const cat = badcaseAnalysis.value.categories.find(c => c.key === selectedCategory.value)
+  return cat ? cat.items.map(i => i.sample_id) : []
+})
+
+async function handleCategoryClick(cat) {
+  if (cat.count === 0) return
+  if (selectedCategory.value === cat.key) {
+    clearCategoryFilter()
+    return
+  }
+  selectedCategory.value = cat.key
+  currentPage.value = 1
+  await loadResults()
+  scrollToResults()
+}
+
+function clearCategoryFilter() {
+  selectedCategory.value = null
+  currentPage.value = 1
+  loadResults()
+}
+
+function scrollToResults() {
+  nextTick(() => {
+    const resultsCard = document.querySelector('.results-toolbar')
+    if (resultsCard) {
+      resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
 
 const task = computed(() => taskStore.currentTask)
 
@@ -319,23 +404,11 @@ function barClass(score) {
   return 'bar-danger'
 }
 
-function formatJson(val) {
-  if (!val) return '—'
-  try {
-    const parsed = typeof val === 'string' ? JSON.parse(val) : val
-    return JSON.stringify(parsed, null, 2)
-  } catch {
-    return String(val)
-  }
-}
-
 function formatOutput(val) {
   if (!val) return '—'
-  // If it's a JSON object/string, try to extract the text content
   try {
     const parsed = typeof val === 'string' ? JSON.parse(val) : val
     if (typeof parsed === 'object' && parsed !== null) {
-      // Extract text fields
       const text = parsed.expected_output || parsed.output || parsed.answer || parsed.text
       if (text) return String(text)
       return JSON.stringify(parsed, null, 2)
@@ -355,9 +428,8 @@ function highlightJson(val) {
   } catch {
     str = String(val)
   }
-  // Simple syntax highlighting
   return str
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>')
     .replace(/("[^"]*")\s*:/g, '<span class="json-key">$1</span>:')
     .replace(/:\s*("[^"]*")/g, ': <span class="json-str">$1</span>')
     .replace(/:\s*(\d+\.?\d*)/g, ': <span class="json-num">$1</span>')
@@ -369,6 +441,11 @@ function outputsMatch(row) {
   const exp = typeof row.expected_output === 'string' ? row.expected_output.trim() : JSON.stringify(row.expected_output).trim()
   const act = typeof row.actual_output === 'string' ? row.actual_output.trim() : JSON.stringify(row.actual_output).trim()
   return exp === act
+}
+
+function goToEditSample(sampleId) {
+  if (!sampleId || !task.value?.dataset) return
+  router.push({ path: `/datasets/${task.value.dataset}`, query: { sample_id: sampleId } })
 }
 
 async function loadTask() {
@@ -383,13 +460,36 @@ async function loadTask() {
   }
 }
 
+async function loadBadcaseAnalysis() {
+  try {
+    badcaseAnalysis.value = await taskApi.badcaseAnalysis(taskId)
+  } catch {
+    badcaseAnalysis.value = null
+  }
+}
+
 async function loadResults() {
-  const params = { task: taskId, page: currentPage.value, page_size: pageSize }
-  if (filterBadcase.value === 'true') params.is_badcase = true
-  if (filterBadcase.value === 'false') params.is_badcase = false
-  if (sortByScore.value === 'score') params.ordering = 'overall_score'
-  else if (sortByScore.value === '-score') params.ordering = '-overall_score'
-  await resultStore.fetchResults(params)
+  // Use POST endpoint when category filter is active to avoid URL length limits
+  if (selectedCategory.value && selectedCategorySampleIds.value.length > 0) {
+    const data = {
+      task: taskId,
+      page: currentPage.value,
+      page_size: pageSize,
+      sample_ids: selectedCategorySampleIds.value,
+    }
+    if (filterBadcase.value === 'true') data.is_badcase = true
+    if (filterBadcase.value === 'false') data.is_badcase = false
+    if (sortByScore.value === 'score') data.ordering = 'overall_score'
+    else if (sortByScore.value === '-score') data.ordering = '-overall_score'
+    await resultStore.fetchFilteredResults(data)
+  } else {
+    const params = { task: taskId, page: currentPage.value, page_size: pageSize }
+    if (filterBadcase.value === 'true') params.is_badcase = true
+    if (filterBadcase.value === 'false') params.is_badcase = false
+    if (sortByScore.value === 'score') params.ordering = 'overall_score'
+    else if (sortByScore.value === '-score') params.ordering = '-overall_score'
+    await resultStore.fetchResults(params)
+  }
 }
 
 async function handleExport() {
@@ -407,9 +507,26 @@ async function handleExport() {
   }
 }
 
+async function handleExportExcel() {
+  try {
+    const blob = await resultStore.exportExcel({ task: taskId })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${task.value?.name || 'results'}_export.xlsx`
+    a.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('Excel 导出已下载')
+  } catch {
+    ElMessage.error('Excel 导出失败')
+  }
+}
+
 onMounted(async () => {
   await loadTask()
-  if (task.value) await loadResults()
+  if (task.value) {
+    await Promise.all([loadResults(), loadBadcaseAnalysis()])
+  }
 })
 </script>
 
@@ -475,6 +592,67 @@ onMounted(async () => {
 .metric-bar.bar-danger { background: linear-gradient(90deg, var(--accent-start), #FF3D71); }
 .metric-score { width: 40px; font-size: 12px; color: var(--text-primary); font-weight: 600; text-align: right; flex-shrink: 0; }
 
+/* ─── Badcase Analysis ─── */
+.bc-category-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.bc-cat-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border-radius: 10px;
+  cursor: default;
+  transition: opacity 0.2s, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.bc-cat-card.cat-api_error {
+  background: rgba(255, 61, 113, 0.08);
+  border: 1px solid rgba(255, 61, 113, 0.2);
+}
+.bc-cat-card.cat-keyword_mismatch {
+  background: rgba(255, 170, 0, 0.08);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+}
+.bc-cat-card.cat-low_score {
+  background: rgba(108, 92, 231, 0.08);
+  border: 1px solid rgba(108, 92, 231, 0.2);
+}
+.bc-cat-active {
+  box-shadow: 0 0 0 2px var(--accent-start);
+  transform: scale(1.02);
+}
+.bc-cat-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--accent-start);
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.bc-cat-count { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+.bc-cat-name { font-size: 12px; color: var(--text-secondary); }
+
+.bc-filter-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(108, 92, 231, 0.08);
+  border: 1px solid rgba(108, 92, 231, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 /* Results Table */
 .results-toolbar {
   display: flex;
@@ -506,6 +684,8 @@ onMounted(async () => {
 }
 
 .sample-id { font-family: monospace; font-size: 12px; color: var(--accent-start); }
+.sample-id-link { cursor: pointer; transition: opacity 0.15s, text-decoration 0.15s; }
+.sample-id-link:hover { opacity: 0.75; text-decoration: underline; }
 .text-muted { color: var(--text-secondary); font-size: 12px; }
 .text-success { color: #00D68F; font-weight: 600; }
 .text-warning { color: #FFAA00; font-weight: 600; }

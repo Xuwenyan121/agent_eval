@@ -1,13 +1,10 @@
 <template>
   <el-config-provider :locale="zhCn">
     <div class="app-container" :class="themeClass">
-      <!-- Home page: no sidebar layout -->
       <template v-if="isHomePage">
         <router-view />
       </template>
-      <!-- Other pages: sidebar layout -->
       <el-container v-else>
-        <!-- Sidebar -->
         <el-aside :width="sidebarCollapsed ? '64px' : '220px'" class="sidebar">
           <div class="logo">
             <span v-if="!sidebarCollapsed" class="logo-text">Agent Eval</span>
@@ -44,17 +41,13 @@
               <el-icon><TrendCharts /></el-icon>
               <template #title>评测报告</template>
             </el-menu-item>
-            <el-menu-item index="/prompts">
-              <el-icon><EditPen /></el-icon>
-              <template #title>裁判 Prompt</template>
-            </el-menu-item>
-            <el-menu-item index="/models">
-              <el-icon><Cpu /></el-icon>
-              <template #title>裁判模型</template>
+            <el-menu-item index="/badcases">
+              <el-icon><WarningFilled /></el-icon>
+              <template #title>BadCase</template>
             </el-menu-item>
             <el-menu-item index="/settings">
               <el-icon><Setting /></el-icon>
-              <template #title>系统设置</template>
+              <template #title>配置模块</template>
             </el-menu-item>
           </el-menu>
           <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
@@ -64,7 +57,6 @@
           </div>
         </el-aside>
 
-        <!-- Main Content -->
         <el-container>
           <el-header class="header">
             <div class="header-left">
@@ -109,9 +101,8 @@ const pageTitles = {
   '/datasets': '数据集管理',
   '/tasks': '评测任务',
   '/reports': '报告中心',
-  '/prompts': '裁判 Prompt 设计',
-  '/models': '裁判模型配置',
-  '/settings': '系统设置',
+  '/badcases': 'BadCase 管理',
+  '/settings': '配置模块',
 }
 
 const currentPageTitle = computed(() => {
@@ -119,15 +110,12 @@ const currentPageTitle = computed(() => {
   return pageTitles[path] || pageTitles[path.split('/').slice(0, 2).join('/')] || 'Agent Eval'
 })
 
-// Theme class: light-theme when isDark is false, no class when dark (default)
 const themeClass = computed(() => isDark.value ? '' : 'light-theme')
 
-// Toggle theme and persist to localStorage
 function toggleTheme(val) {
   localStorage.setItem('theme', val ? 'dark' : 'light')
 }
 
-// Restore theme preference on mount
 onMounted(() => {
   const saved = localStorage.getItem('theme')
   if (saved === 'light') {

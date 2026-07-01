@@ -64,52 +64,61 @@ class SSEAgentCollector(BaseCollector):
                             if not line:
                                 continue
 
-                            # Standard SSE: lines start with "data:"
+                            # ---- Step 1: Extract raw payload from the line ----
+                            # Standard SSE: "data: <payload>"
                             if line.startswith("data:"):
                                 data = line[5:].strip()
-                            else:
-                                # Some agents send raw JSON without "data:" prefix
+                            # Independent event field: "event: <type>" (standard SSE)
+                            elif line.startswith("event:"):
+                                current_event_type = line.split(":", 1)[1].strip()
+                                logger.debug("SSE event type (field): %s", current_event_type)
+                                continue
+                            # Raw JSON without "data:" prefix
+                            elif line.startswith("{"):
                                 data = line.strip()
-                                if not data.startswith("{"):
-                                    continue
+                            else:
+                                continue  # skip comments, empty, etc.
 
-                            # Check for stream termination
-                            # Match exact marker, "event: <marker>", or "event:<marker>"
-                            if data == self.done_marker:
-                                break
-                            if data.startswith("event:") and data.split(":", 1)[1].strip() == self.done_marker:
-                                break
-
-                            # Track event type markers (e.g. "event: delta", "event: progress")
+                            # ---- Step 2: Check for embedded event type markers ----
+                            # Some agents embed event type in data payloads:
+                            #   "data:event: meta"  → after strip: "event: meta"
+                            # Extract the type and skip to next line for the actual data
                             if data.startswith("event:"):
                                 current_event_type = data.split(":", 1)[1].strip()
+                                logger.debug("SSE event type (data-embedded): %s", current_event_type)
+                                if self.done_marker and current_event_type == self.done_marker:
+                                    break
                                 continue
 
-                            # Parse JSON
+                            # ---- Step 3: Terminate on done marker ----
+                            if data == self.done_marker:
+                                break
+
+                            # ---- Step 4: Parse JSON ----
                             try:
                                 chunk_json = json.loads(data)
                             except json.JSONDecodeError:
                                 chunks_log.append({"raw": data, "chunk_index": chunk_count})
                                 continue
 
-                            # Capture meta event data (agentId, convId, title, etc.)
+                            # ---- Step 5: Handle meta event ----
                             if current_event_type == "meta":
                                 meta_data = chunk_json
                                 logger.debug("Captured meta: %s", meta_data)
+                                current_event_type = None
                                 chunk_count += 1
                                 continue
 
-                            # Check for finish in JSON (e.g. {"finishReason":"SUCCESS"})
+                            # ---- Step 6: Check for finish ----
                             if chunk_json.get("finishReason") or "finish_reason" in chunk_json:
                                 break
 
-                            # If event types are used, only extract from "delta" events
-                            # (skip "progress", etc.)
+                            # ---- Step 7: Skip non-content events (progress, etc.) ----
                             if current_event_type and current_event_type not in ("delta", "message", "content"):
                                 chunk_count += 1
                                 continue
 
-                            # Extract content using configured field path
+                            # ---- Step 8: Extract content ----
                             content = self.extract_field(chunk_json, self.sse_event_field)
                             if content:
                                 full_text += content

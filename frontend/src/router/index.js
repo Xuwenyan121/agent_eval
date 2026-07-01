@@ -62,14 +62,9 @@ const routes = [
     component: () => import('@/views/ReportDetail.vue'),
   },
   {
-    path: '/prompts',
-    name: 'PromptLibrary',
-    component: () => import('@/views/PromptLibrary.vue'),
-  },
-  {
-    path: '/models',
-    name: 'ModelConfig',
-    component: () => import('@/views/ModelConfig.vue'),
+    path: '/badcases',
+    name: 'BadCases',
+    component: () => import('@/views/BadCases.vue'),
   },
   {
     path: '/settings',

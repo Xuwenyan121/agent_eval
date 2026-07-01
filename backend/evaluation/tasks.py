@@ -4,6 +4,7 @@ Celery tasks: orchestrates the full evaluation pipeline.
   2. Evaluation: DeepEval scoring on collected LLMTestCases
   3. Storage: persist results + traces to database
   4. Tracking: log to MLflow (non-blocking, best-effort)
+  5. BadCase Collection: auto-collect badcases after pipeline completes (Phase 5)
 """
 
 import asyncio
@@ -123,6 +124,7 @@ def run_evaluation_task(self, task_id: str):
     2. Evaluate: run DeepEval metrics on collected test cases
     3. Store: persist results and traces to database
     4. Track: log summary to MLflow (best-effort)
+    5. BadCase: auto-collect if configured
     """
     from evaluation.models import EvaluationTask, EvaluationResult, Trace
     from evaluation.collectors import get_collector
@@ -140,6 +142,14 @@ def run_evaluation_task(self, task_id: str):
     task.started_at = timezone.now()
     task.save(update_fields=["status", "started_at"])
     logger.info("Starting evaluation: task=%s (%s)", task.name, task_id)
+
+    # Clear old results to ensure idempotency (prevent duplicates on retry)
+    from evaluation.models import EvaluationResult, Trace
+    deleted_results, _ = EvaluationResult.objects.filter(task=task).delete()
+    deleted_traces, _ = Trace.objects.filter(task=task).delete()
+    if deleted_results or deleted_traces:
+        logger.info("Cleared old data for task=%s: %d results, %d traces",
+                     task_id, deleted_results, deleted_traces)
 
     try:
         result = _run_pipeline(task, task_id)
@@ -191,18 +201,17 @@ def _run_pipeline(task, task_id: str) -> dict:
         results = []
         done_count = 0
         fail_count = 0
+        seq_counter = 0  # auto-incrementing sequence for isolated conv_id
 
         async def collect_one(sample):
-            nonlocal done_count, fail_count
+            nonlocal done_count, fail_count, seq_counter
             async with sem:
-                # Build sample_vars based on conv_id_strategy
                 sample_vars = {}
                 if strategy == "isolated":
-                    # Each sample gets a unique numeric convId
-                    sample_vars["conv_id"] = str(int(time.time() * 1000) + hash(sample.sample_id) % 100000)
+                    sample_vars["conv_id"] = str(int(time.time() * 1000) * 10000 + seq_counter)
+                    seq_counter += 1
                 elif strategy == "shared":
                     sample_vars["conv_id"] = shared_conv_id
-                # else "dataset": don't set conv_id — let _render() use the dataset's value
                 result = await collector.collect(sample.input, sample_vars)
                 if result["error"]:
                     fail_count += 1
@@ -210,7 +219,6 @@ def _run_pipeline(task, task_id: str) -> dict:
                 else:
                     done_count += 1
                 results.append((sample, result))
-                # Update progress every 5 samples or at the end
                 if len(results) % 5 == 0 or len(results) == total_samples:
                     _update_progress(task_id, "collecting", done_count, total_samples,
                                      fail_count, 0, 0)
@@ -242,7 +250,6 @@ def _run_pipeline(task, task_id: str) -> dict:
         )
         tc._sample_ref = sample
         tc._collect_result = result
-        # Attach meta data for MetaValidationMetric
         tc._actual_meta = result.get("meta") or {}
         tc._expected_meta = getattr(sample, "expected_meta", None) or {}
         test_cases.append(tc)
@@ -282,12 +289,10 @@ def _run_pipeline(task, task_id: str) -> dict:
         overall = _compute_weighted_overall(metric_data, metrics_config)
         collected_result = tc._collect_result
 
-        # Aggregate per-metric scores for MLflow
         for name, data in metric_data.items():
             if data.get("score") is not None:
                 metric_aggregates.setdefault(name, []).append(data["score"])
 
-        # Store trace
         collected_meta = collected_result.get("meta") or {}
         trace_spans = [{
             "type": "agent.collect",
@@ -295,7 +300,6 @@ def _run_pipeline(task, task_id: str) -> dict:
             "chunks": len(collected_result["chunks"]),
             "output": collected_result["output"][:500],
         }]
-        # Add meta span if available (agentId, convId, title from event: meta)
         if collected_meta:
             trace_spans.append({
                 "type": "agent.meta",
@@ -311,7 +315,7 @@ def _run_pipeline(task, task_id: str) -> dict:
             task=task,
             sample_id=tc._sample_ref.sample_id,
             spans=trace_spans,
-            trace_data=collected_meta,  # Store full meta as trace_data
+            trace_data=collected_meta,
             final_output=collected_result["output"],
             raw_sse_chunks=collected_result["chunks"][:20],
             total_duration_ms=collected_result["latency_ms"],
@@ -338,9 +342,10 @@ def _run_pipeline(task, task_id: str) -> dict:
     task.completed_at = timezone.now()
     task.save(update_fields=["status", "completed_at"])
 
-    # Update dataset sample count
-    task.dataset.update_sample_count()
-
+    try:
+        task.dataset.update_sample_count()
+    except Exception as e:
+        logger.warning("Failed to update dataset sample count for task=%s: %s", task_id, e)
     logger.info("Storage complete: %d results stored", stored_count)
 
     # ── Phase 4: MLflow Tracking (non-blocking) ──
@@ -353,12 +358,48 @@ def _run_pipeline(task, task_id: str) -> dict:
         "Pipeline completed: task=%s, evaluated=%d, errors=%d, stored=%d",
         task.name, len(test_cases), error_count, stored_count,
     )
+
+    # ── Phase 5: BadCase Collection (auto if configured) ──
+    badcase_config = task.evaluator_config.get("badcase_collection", {}) if task.evaluator_config else {}
+    if badcase_config.get("enabled") and badcase_config.get("auto_collect"):
+        _trigger_badcase_collection(task)
+    else:
+        logger.info("BadCase auto-collection not enabled, skipping")
+
     return {
         "status": "completed",
         "samples": len(test_cases),
         "errors": error_count,
         "stored": stored_count,
     }
+
+
+# ─── BadCase Collection Helpers ─────────────────────────────────────
+
+def _trigger_badcase_collection(task):
+    """Trigger BadCase collection after pipeline completion (synchronous, runs inline)."""
+    try:
+        from evaluation.badcase.collector import collect_badcases_for_task
+        result = collect_badcases_for_task(str(task.id))
+        logger.info(
+            "BadCase collection finished: collected=%d, new_feedbacks=%d",
+            result.get("collected_count", 0),
+            result.get("new_feedback_count", 0),
+        )
+    except Exception as e:
+        logger.error("BadCase collection failed for task %s: %s", task.id, e)
+
+
+@shared_task
+def collect_badcases_task(task_id: str, rule_ids: list = None):
+    """
+    Async Celery task: trigger BadCase collection for a completed task.
+
+    Can be called directly from API:
+        POST /api/v1/tasks/{id}/badcases/collect/
+    """
+    from evaluation.badcase.collector import collect_badcases_for_task
+    return collect_badcases_for_task(str(task_id), rule_ids)
 
 
 # ─── Batch Evaluation Task ──────────────────────────────────────────

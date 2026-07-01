@@ -30,6 +30,22 @@ export const useResultStore = defineStore('results', () => {
     }
   }
 
+  async function fetchFilteredResults(data = {}) {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await resultApi.filter(data)
+      results.value = res.results || res
+      if (res.count !== undefined) {
+        pagination.value.count = res.count
+      }
+    } catch (e) {
+      error.value = e.response?.data?.detail || e.message
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function fetchResult(id) {
     loading.value = true
     error.value = null
@@ -97,10 +113,20 @@ export const useResultStore = defineStore('results', () => {
     }
   }
 
+  async function exportExcel(params = {}) {
+    try {
+      const blob = await resultApi.exportExcel(params)
+      return blob
+    } catch (e) {
+      error.value = e.response?.data?.detail || e.message
+      throw e
+    }
+  }
+
   return {
     results, currentResult, badcases, loading, error, pagination, total, badcaseCount,
     currentTrace,
-    fetchResults, fetchResult, fetchBadcases, fetchTrace,
-    submitFeedback, updateFeedback, exportBadcases,
+    fetchResults, fetchFilteredResults, fetchResult, fetchBadcases, fetchTrace,
+    submitFeedback, updateFeedback, exportBadcases, exportExcel,
   }
 })

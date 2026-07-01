@@ -20,7 +20,6 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('access_token')
-      // Only redirect if not already on login page
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login'
       }
@@ -51,16 +50,13 @@ export const datasetApi = {
   update: (id, data) => apiClient.put(`/datasets/${id}/`, data),
   partialUpdate: (id, data) => apiClient.patch(`/datasets/${id}/`, data),
   delete: (id) => apiClient.delete(`/datasets/${id}/`),
-  // Samples
   samples: (id, params) => apiClient.get(`/datasets/${id}/samples/`, { params }),
   addSample: (id, data) => apiClient.post(`/datasets/${id}/add_sample/`, data),
   updateSample: (id, sampleId, data) => apiClient.put(`/datasets/${id}/samples/${sampleId}/`, data),
   deleteSample: (id, sampleId) => apiClient.delete(`/datasets/${id}/samples/${sampleId}/`),
-  // Upload JSONL file (multipart)
   upload: (id, formData) => apiClient.post(`/datasets/${id}/upload/`, formData, {
     timeout: 120000,
   }),
-  // Versioning
   version: (id, data) => apiClient.post(`/datasets/${id}/create_version/`, data),
 }
 
@@ -72,22 +68,29 @@ export const taskApi = {
   update: (id, data) => apiClient.put(`/tasks/${id}/`, data),
   partialUpdate: (id, data) => apiClient.patch(`/tasks/${id}/`, data),
   delete: (id) => apiClient.delete(`/tasks/${id}/`),
-  // Actions
   run: (id) => apiClient.post(`/tasks/${id}/run/`),
   stop: (id) => apiClient.post(`/tasks/${id}/stop/`),
   progress: (id) => apiClient.get(`/tasks/${id}/progress/`),
-  // Comparison
   compare: (taskIds) => apiClient.post('/tasks/compare_tasks/', { task_ids: taskIds }),
+  badcaseAnalysis: (id) => apiClient.get(`/tasks/${id}/badcase-analysis/`),
+  // BadCase Collection
+  collectBadcases: (id, data) => apiClient.post(`/tasks/${id}/badcases/collect/`, data || {}),
+  listBadcases: (id, params) => apiClient.get(`/tasks/${id}/badcases/`, { params }),
+  getBadcaseDetail: (taskId, feedbackId) => apiClient.get(`/tasks/${taskId}/badcases/${feedbackId}/`),
+  badcaseStats: (id) => apiClient.get(`/tasks/${id}/badcases/stats/`),
 }
 
 // ─── Result Endpoints ─────────────────────────────────────────────
 export const resultApi = {
   list: (params) => apiClient.get('/results/', { params }),
+  filter: (data) => apiClient.post('/results/filter/', data),
   get: (id) => apiClient.get(`/results/${id}/`),
-  // Badcases
   badcases: (params) => apiClient.get('/results/badcases/', { params }),
-  // Export
   exportJsonl: (params) => apiClient.get('/results/export_jsonl/', {
+    params,
+    responseType: 'blob',
+  }),
+  exportExcel: (params) => apiClient.get('/results/export_excel/', {
     params,
     responseType: 'blob',
   }),
@@ -108,6 +111,17 @@ export const feedbackApi = {
   delete: (id) => apiClient.delete(`/feedback/${id}/`),
 }
 
+// ─── BadCase Collection Rules ─────────────────────────────────────
+export const badcaseRuleApi = {
+  list: (params) => apiClient.get('/badcase-rules/', { params }),
+  get: (id) => apiClient.get(`/badcase-rules/${id}/`),
+  create: (data) => apiClient.post('/badcase-rules/', data),
+  update: (id, data) => apiClient.put(`/badcase-rules/${id}/`, data),
+  partialUpdate: (id, data) => apiClient.patch(`/badcase-rules/${id}/`, data),
+  delete: (id) => apiClient.delete(`/badcase-rules/${id}/`),
+  test: (id, data) => apiClient.post(`/badcase-rules/${id}/test/`, data),
+}
+
 // ─── Metric Endpoints ─────────────────────────────────────────────
 export const metricApi = {
   list: (params) => apiClient.get('/metrics/', { params }),
@@ -117,7 +131,6 @@ export const metricApi = {
   partialUpdate: (id, data) => apiClient.patch(`/metrics/${id}/`, data),
   delete: (id) => apiClient.delete(`/metrics/${id}/`),
   types: () => apiClient.get('/metrics/types/'),
-  // Dry-run: POST to /api/v1/metrics/dry-run/
   dryRun: (data) => apiClient.post('/metrics/dry-run/', data),
 }
 
@@ -147,12 +160,8 @@ export const judgeModelApi = {
   test: (data) => apiClient.post('/judge-models/test/', data),
 }
 
-// ─── Dashboard / Stats (aggregate from existing endpoints) ────────
+// ─── Dashboard / Stats ────────────────────────────────────────────
 export const dashboardApi = {
-  /**
-   * Fetch all dashboard stats in parallel.
-   * Returns aggregated data from agents, datasets, tasks, results, metrics.
-   */
   async getStats() {
     const [agents, datasets, tasks, badcases, metrics] = await Promise.all([
       agentApi.list({ page_size: 100 }).catch(() => ({ count: 0, results: [] })),
@@ -165,20 +174,17 @@ export const dashboardApi = {
     const allTasks = tasks.results || []
     const allAgents = agents.results || []
 
-    // Compute task status distribution
     const statusDist = { pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0 }
     allTasks.forEach(t => {
       const s = t.status?.toLowerCase()
       if (s in statusDist) statusDist[s]++
     })
 
-    // Compute average score from completed tasks
     const completedTasks = allTasks.filter(t => t.status === 'completed' && t.overall_score != null)
     const avgScore = completedTasks.length > 0
       ? completedTasks.reduce((sum, t) => sum + (t.overall_score || 0), 0) / completedTasks.length
       : null
 
-    // Build 7-day task trend (count per day)
     const now = new Date()
     const trendDays = 7
     const trendLabels = []
@@ -191,7 +197,6 @@ export const dashboardApi = {
       trendCounts.push(allTasks.filter(t => t.created_at?.slice(0, 10) === dateStr).length)
     }
 
-    // Build score distribution buckets
     const scoreBuckets = { '0-0.2': 0, '0.2-0.4': 0, '0.4-0.6': 0, '0.6-0.8': 0, '0.8-1.0': 0 }
     completedTasks.forEach(t => {
       const s = t.overall_score || 0
@@ -203,24 +208,19 @@ export const dashboardApi = {
     })
 
     return {
-      // Counts
       agentCount: agents.count || allAgents.length,
       activeAgentCount: allAgents.filter(a => a.status === 'active').length,
       datasetCount: datasets.count || 0,
       taskCount: tasks.count || allTasks.length,
       badcaseCount: badcases.count || 0,
       metricCount: metrics.count || 0,
-      // Computed
       avgScore,
       completedCount: completedTasks.length,
       runningCount: statusDist.running,
-      // Distributions
       statusDistribution: statusDist,
       scoreDistribution: scoreBuckets,
-      // Trend
       trendLabels,
       trendCounts,
-      // Recent
       recentTasks: allTasks.slice(0, 10),
       agents: allAgents.slice(0, 5),
     }

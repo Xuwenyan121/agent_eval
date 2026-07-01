@@ -322,6 +322,86 @@ class Trace(models.Model):
         return f"Trace {self.trace_id} ({self.sample_id})"
 
 
+class BadCaseCollectionRule(models.Model):
+    """BadCase collection rule definition with flexible dimensions."""
+
+    RULE_TYPES = [
+        ("score_below", "Score Below Threshold"),
+        ("score_above", "Score Above Threshold (Spot Check)"),
+        ("metric_below", "Per-Metric Below Threshold"),
+        ("metric_above", "Per-Metric Above Threshold"),
+        ("boundary", "Boundary Samples"),
+        ("random", "Random Sampling"),
+        ("stratified", "Stratified Sampling"),
+        ("error", "Error Samples"),
+        ("high_latency", "High Latency"),
+        ("low_latency", "Low Latency (Suspected Cache)"),
+        ("score_variance", "Score Variance (Judge Disagreement)"),
+        ("custom", "Custom Expression"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default="")
+    rule_type = models.CharField(max_length=30, choices=RULE_TYPES)
+    parameters = models.JSONField(default=dict, help_text="Rule parameters (threshold, sample_rate, etc.)")
+    target_dataset = models.ForeignKey(
+        Dataset, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="collection_rules",
+    )
+    auto_collect = models.BooleanField(
+        default=False,
+        help_text="Whether to auto-trigger collection when a linked task completes",
+    )
+    enabled = models.BooleanField(default=True)
+    priority = models.IntegerField(default=0, help_text="Higher priority rules run first")
+    max_count = models.IntegerField(null=True, blank=True, help_text="Max samples to collect per run (null = unlimited)")
+    created_by = models.ForeignKey(
+        "auth.User", null=True, blank=True, on_delete=models.SET_NULL,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "badcase_collection_rules"
+        ordering = ["-priority", "-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.rule_type}) priority={self.priority}"
+
+
+class BadCaseCollectionRecord(models.Model):
+    """Audit log for each collection execution."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    task = models.ForeignKey(
+        EvaluationTask, on_delete=models.CASCADE, related_name="collection_records",
+    )
+    rules_snapshot = models.JSONField(help_text="Snapshot of rules applied during this run")
+    total_results = models.IntegerField(help_text="Total evaluation results in the task")
+    collected_count = models.IntegerField(default=0, help_text="Total BadCase samples collected this run")
+    new_feedback_count = models.IntegerField(default=0, help_text="New BadCaseFeedback records created")
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("running", "Running"),
+            ("completed", "Completed"),
+            ("failed", "Failed"),
+        ],
+        default="running",
+    )
+    error_message = models.TextField(blank=True, default="")
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "badcase_collection_records"
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"Collection for {self.task.name} [{self.status}] - {self.collected_count} badcases"
+
+
 class BadCaseFeedback(models.Model):
     """BadCase feedback and annotation tracking."""
 
@@ -342,6 +422,28 @@ class BadCaseFeedback(models.Model):
         "auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="reviews"
     )
     review_comment = models.TextField(blank=True, default="")
+
+    # ── Collection tracking (new) ──────────────────────────────────
+    collection_rule = models.ForeignKey(
+        BadCaseCollectionRule, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="feedbacks",
+    )
+    collection_record = models.ForeignKey(
+        BadCaseCollectionRecord, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="feedbacks",
+    )
+    matched_rules = models.JSONField(
+        default=list, blank=True,
+        help_text='Rules that matched: [{"rule_id": "...", "rule_name": "...", "reason": "..."}]',
+    )
+
+    # ── Migration tracking (new) ───────────────────────────────────
+    migrated_to_sample = models.ForeignKey(
+        DatasetSample, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="source_feedbacks",
+    )
+    migrated_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
 

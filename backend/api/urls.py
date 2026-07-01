@@ -8,6 +8,7 @@ from api.views import (
     EvaluationResultViewSet,
     TraceViewSet,
     BadCaseFeedbackViewSet,
+    BadCaseCollectionRuleViewSet,
     MetricDefinitionViewSet,
     metric_dry_run,
     JudgePromptViewSet,
@@ -23,15 +24,14 @@ router.register(r"tasks", EvaluationTaskViewSet, basename="task")
 router.register(r"results", EvaluationResultViewSet, basename="result")
 router.register(r"traces", TraceViewSet, basename="trace")
 router.register(r"feedback", BadCaseFeedbackViewSet, basename="feedback")
+router.register(r"badcase-rules", BadCaseCollectionRuleViewSet, basename="badcase-rule")
 router.register(r"metrics", MetricDefinitionViewSet, basename="metric")
 router.register(r"prompts", JudgePromptViewSet, basename="prompt")
 router.register(r"judge-models", JudgeModelViewSet, basename="judge-model")
 
 urlpatterns = [
-    # Custom endpoints BEFORE router (to avoid catch-all conflicts)
     path("metrics/dry-run/", metric_dry_run, name="metric-dry-run"),
     path("prompts/dry-run/", prompt_dry_run, name="prompt-dry-run"),
     path("judge-models/test/", model_test, name="model-test"),
-    # Router-managed endpoints
     path("", include(router.urls)),
 ]

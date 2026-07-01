@@ -629,8 +629,31 @@ async function handleSaveSample() {
 
 onMounted(async () => {
   await loadDataset()
-  if (dataset.value) await loadSamples()
+  if (dataset.value) {
+    await loadSamples()
+    // Handle sample_id query param: open edit dialog for target sample
+    const targetSampleId = route.query.sample_id
+    if (targetSampleId) {
+      await openEditForSampleId(targetSampleId)
+    }
+  }
 })
+
+async function openEditForSampleId(sampleId) {
+  // Load all samples to find the target
+  try {
+    const res = await store.fetchSamples(datasetId, { page: 1, page_size: 10000 })
+    const samplesList = res.results || res || []
+    const target = samplesList.find(s => s.sample_id === sampleId)
+    if (target) {
+      openEditDialog(target)
+      // Clear the query param from URL to avoid re-triggering on refresh
+      router.replace({ path: `/datasets/${datasetId}`, query: {} })
+    }
+  } catch {
+    // Silently fail - sample may not exist or loading error
+  }
+}
 </script>
 
 <style scoped>

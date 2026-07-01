@@ -2,7 +2,7 @@ from rest_framework import serializers
 from evaluation.models import (
     AgentEndpoint, Dataset, DatasetSample, EvaluationTask,
     EvaluationResult, Trace, BadCaseFeedback, MetricDefinition, JudgePrompt,
-    JudgeModel,
+    JudgeModel, BadCaseCollectionRule, BadCaseCollectionRecord,
 )
 
 
@@ -93,7 +93,6 @@ class DatasetDetailSerializer(DatasetSerializer):
 
     def get_fields(self):
         fields = super().get_fields()
-        # Limit to 10 recent samples
         fields["recent_samples"].child_relation = None
         return fields
 
@@ -147,8 +146,6 @@ class EvaluationTaskCreateSerializer(serializers.ModelSerializer):
         metrics = value.get("metrics", [])
         if not metrics:
             raise serializers.ValidationError("At least one metric must be configured.")
-
-        # Validate weights sum to approximately 1.0
         total_weight = sum(m.get("weight", 1.0) for m in metrics)
         if abs(total_weight - 1.0) > 0.1:
             raise serializers.ValidationError(
@@ -244,7 +241,6 @@ class EvaluationResultListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "sample_id", "overall_score", "is_badcase",
             "latency_ms", "error", "created_at",
-            # Fields for expand section
             "input", "expected_output", "actual_output",
             "metric_results", "trace_id",
         ]
@@ -302,6 +298,43 @@ class BadCaseExportSerializer(serializers.Serializer):
     """For exporting BadCases."""
     format = serializers.ChoiceField(choices=["jsonl", "csv"], default="jsonl")
     include_traces = serializers.BooleanField(default=False)
+
+
+# ═══════════════════════════════════════════════════════════
+# BadCaseCollectionRule (NEW)
+# ═══════════════════════════════════════════════════════════
+
+class BadCaseCollectionRuleSerializer(serializers.ModelSerializer):
+    """Full serializer for BadCase collection rules."""
+
+    class Meta:
+        model = BadCaseCollectionRule
+        fields = [
+            "id", "name", "description", "rule_type", "parameters",
+            "target_dataset", "auto_collect", "enabled", "priority",
+            "max_count", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class BadCaseCollectionRuleCreateSerializer(serializers.ModelSerializer):
+    """For creating a new BadCase collection rule."""
+
+    class Meta:
+        model = BadCaseCollectionRule
+        fields = [
+            "name", "description", "rule_type", "parameters",
+            "target_dataset", "auto_collect", "enabled", "priority",
+            "max_count",
+        ]
+
+    def validate_parameters(self, value):
+        rule_type = self.initial_data.get("rule_type", "")
+        if rule_type == "score_below" and "threshold" not in value:
+            raise serializers.ValidationError("score_below requires 'threshold' in parameters")
+        if rule_type == "metric_below" and "metric_name" not in value:
+            raise serializers.ValidationError("metric_below requires 'metric_name' in parameters")
+        return value
 
 
 # ═══════════════════════════════════════════════════════════
